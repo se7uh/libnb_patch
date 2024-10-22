@@ -3,7 +3,7 @@
 #include <cstring>
 #include <nbtools/patchHex.h>
 #ifdef IS_32
-unsigned int sizeofNB = 5* 1024*1024
+unsigned int sizeofNB = 5* 1024*1024;
 #else
 unsigned int sizeofNB = 6*1024*1024;
 #endif
