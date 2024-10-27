@@ -4,7 +4,7 @@
 #include <log.h>
 
 #ifdef IS_32
-unsigned int sizeofNB = 5* 1024*1024
+unsigned int sizeofNB = 5* 1024*1024;
 #else
 unsigned int sizeofNB = 8*1024*1024;
 #endif
