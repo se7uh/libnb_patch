@@ -1,0 +1,112 @@
+name: Build libnb
+
+on:
+  push:
+    branches: [ "main" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      compile_arch:
+        description: 'Target architecture to compile for'
+        required: false
+        default: 'x86_64'
+        type: choice
+        options:
+        - 'x86_64'
+        - 'x86'
+      nativebridge:
+        description: 'Native bridge to use'
+        required: false
+        default: 'houdini'
+        type: choice
+        options:
+        - houdini
+        - ndk_translation
+      nb_version:
+        description: 'Version of native bridge'
+        required: false
+        default: '11_38765'
+        type: choice
+        options:
+        - '11_38765'
+        - '12_38818'
+        - 'R112-15359.58.0'
+        - 'R125-15853.53.0'
+      log_debug:
+        description: 'Enable debug logging'
+        required: false
+        default: false
+        type: boolean
+      skip_readable_check:
+        description: 'Skip the is_readable check when patching'
+        required: false
+        default: true
+        type: boolean
+      skip_nb_enabled_check:
+        description: 'Skip is_native_bridge_enabled check'
+        required: false
+        default: false
+        type: boolean
+      enable_experimental_patches:
+        description: 'Enable experimental patches'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      id: setup-ndk
+      with:
+        ndk-version: r27c
+        add-to-path: false
+
+    - name: Set up CMake
+      uses: lukka/get-cmake@latest
+
+    - name: Configure CMake
+      run: |
+        cmake . -B build \
+        -Wno-dev \
+        -Wno-deprecated \
+        -DANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }} \
+        -DCOMPILE_ARCH=${{ inputs.compile_arch || 'x86_64' }} \
+        -DNATIVEBRIDGE=${{ inputs.nativebridge || 'houdini' }} \
+        -DNB_VERSION=${{ inputs.nb_version || '11_38765' }} \
+        -DLOG_DEBUG=${{ inputs.log_debug || 'OFF' }} \
+        -DSKIP_READABLE_CHECK=${{ inputs.skip_readable_check || 'ON' }} \
+        -DSKIP_NB_ENABLED_CHECK=${{ inputs.skip_nb_enabled_check || 'OFF' }} \
+        -DENABLE_EXPERIMENTAL_PATCHES=${{ inputs.enable_experimental_patches || 'OFF' }}
+
+    - name: Build
+      run: |
+        cd build
+        make
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: libnb-${{ inputs.compile_arch || 'x86_64' }}
+        path: build/src/libnb.so
+        if-no-files-found: error
+
+    - name: Create Release and Upload Asset
+      uses: softprops/action-gh-release@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        files: build/src/libnb.so
+        tag_name: release-${{ github.sha }}
+        name: "Build Release (${{ inputs.compile_arch || 'x86_64' }}-${{ inputs.nativebridge || 'houdini' }}-${{ inputs.nb_version || '11_38765' }})"
+        draft: false
+        prerelease: false
+        generate_release_notes: true 
