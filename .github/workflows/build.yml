@@ -9,14 +9,6 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
     inputs:
-      compile_arch:
-        description: 'Target architecture to compile for'
-        required: false
-        default: 'x86_64'
-        type: choice
-        options:
-        - 'x86_64'
-        - 'x86'
       nativebridge:
         description: 'Native bridge to use'
         required: false
@@ -73,13 +65,13 @@ jobs:
     - name: Set up CMake
       uses: lukka/get-cmake@latest
 
-    - name: Configure CMake
+    - name: Configure CMake (x86_64)
       run: |
-        cmake . -B build \
+        cmake . -B build64 \
         -Wno-dev \
         -Wno-deprecated \
         -DANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }} \
-        -DCOMPILE_ARCH=${{ inputs.compile_arch || 'x86_64' }} \
+        -DCOMPILE_ARCH=x86_64 \
         -DNATIVEBRIDGE=${{ inputs.nativebridge || 'houdini' }} \
         -DNB_VERSION=${{ inputs.nb_version || '11_38765' }} \
         -DLOG_DEBUG=${{ inputs.log_debug || 'OFF' }} \
@@ -87,26 +79,62 @@ jobs:
         -DSKIP_NB_ENABLED_CHECK=${{ inputs.skip_nb_enabled_check || 'OFF' }} \
         -DENABLE_EXPERIMENTAL_PATCHES=${{ inputs.enable_experimental_patches || 'OFF' }}
 
-    - name: Build
+    - name: Build (x86_64)
       run: |
-        cd build
+        cd build64
         make
+        cd ..
+        mkdir -p lib64
+        cp build64/src/libnb.so lib64/
 
-    - name: Upload artifacts
+    - name: Configure CMake (x86)
+      run: |
+        cmake . -B build32 \
+        -Wno-dev \
+        -Wno-deprecated \
+        -DANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }} \
+        -DCOMPILE_ARCH=x86 \
+        -DNATIVEBRIDGE=${{ inputs.nativebridge || 'houdini' }} \
+        -DNB_VERSION=${{ inputs.nb_version || '11_38765' }} \
+        -DLOG_DEBUG=${{ inputs.log_debug || 'OFF' }} \
+        -DSKIP_READABLE_CHECK=${{ inputs.skip_readable_check || 'ON' }} \
+        -DSKIP_NB_ENABLED_CHECK=${{ inputs.skip_nb_enabled_check || 'OFF' }} \
+        -DENABLE_EXPERIMENTAL_PATCHES=${{ inputs.enable_experimental_patches || 'OFF' }}
+
+    - name: Build (x86)
+      run: |
+        cd build32
+        make
+        cd ..
+        mkdir -p lib
+        cp build32/src/libnb.so lib/
+
+    - name: Upload artifacts (x86_64)
       uses: actions/upload-artifact@v4
       with:
-        name: libnb-${{ inputs.compile_arch || 'x86_64' }}
-        path: build/src/libnb.so
+        name: libnb-x86_64
+        path: lib64/libnb.so
         if-no-files-found: error
+
+    - name: Upload artifacts (x86)
+      uses: actions/upload-artifact@v4
+      with:
+        name: libnb-x86
+        path: lib/libnb.so
+        if-no-files-found: error
+
+    - name: Create zip archive
+      run: |
+        zip -r libnb-${{ inputs.nativebridge || 'houdini' }}-${{ inputs.nb_version || '11_38765' }}.zip lib/ lib64/
 
     - name: Create Release and Upload Asset
       uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        files: build/src/libnb.so
+        files: libnb-${{ inputs.nativebridge || 'houdini' }}-${{ inputs.nb_version || '11_38765' }}.zip
         tag_name: release-${{ github.sha }}
-        name: "Build Release (${{ inputs.compile_arch || 'x86_64' }}-${{ inputs.nativebridge || 'houdini' }}-${{ inputs.nb_version || '11_38765' }})"
+        name: "Build Release (x86_64+x86-${{ inputs.nativebridge || 'houdini' }}-${{ inputs.nb_version || '11_38765' }})"
         draft: false
         prerelease: false
         generate_release_notes: true 
